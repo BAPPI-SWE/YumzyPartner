@@ -24,6 +24,7 @@ import com.yumzy.partner.auth.AuthScreen
 import com.yumzy.partner.auth.AuthViewModel
 import com.yumzy.partner.auth.GoogleAuthUiClient
 import com.yumzy.partner.features.dashboard.PartnerDashboardScreen
+import com.yumzy.partner.features.menu.AddMenuItemScreen // Import new screen
 import com.yumzy.partner.features.profile.RestaurantProfileScreen
 import com.yumzy.partner.ui.theme.YumzyPartnerTheme
 import kotlinx.coroutines.launch
@@ -44,6 +45,7 @@ class MainActivity : ComponentActivity() {
                 val navController = rememberNavController()
 
                 NavHost(navController = navController, startDestination = "auth") {
+                    // ... "auth" and "create_profile" composables remain the same
 
                     composable("auth") {
                         val viewModel = viewModel<AuthViewModel>()
@@ -122,7 +124,43 @@ class MainActivity : ComponentActivity() {
                     }
 
                     composable("dashboard") {
-                        PartnerDashboardScreen()
+                        PartnerDashboardScreen(
+                            onNavigateToAddItem = {
+                                navController.navigate("add_item")
+                            }
+                        )
+                    }
+
+                    // NEW: Add the route and logic for the AddMenuItemScreen
+                    composable("add_item") {
+                        val ownerId = Firebase.auth.currentUser?.uid
+                        if(ownerId == null) {
+                            navController.navigate("auth") { popUpTo("auth") { inclusive = true } }
+                            return@composable
+                        }
+
+                        AddMenuItemScreen(
+                            onSaveItemClicked = { itemName, price, category ->
+                                val newItem = hashMapOf(
+                                    "name" to itemName,
+                                    "price" to price.toDoubleOrNull(), // Convert price to number
+                                    "category" to category,
+                                    "isAvailable" to true // Default availability
+                                )
+
+                                // We save menu items in a "menuItems" subcollection inside the restaurant's document
+                                Firebase.firestore.collection("restaurants").document(ownerId)
+                                    .collection("menuItems")
+                                    .add(newItem) // .add() creates a new document with a random ID
+                                    .addOnSuccessListener {
+                                        Toast.makeText(applicationContext, "$itemName added!", Toast.LENGTH_SHORT).show()
+                                        navController.popBackStack() // Go back to the dashboard
+                                    }
+                                    .addOnFailureListener { e ->
+                                        Toast.makeText(applicationContext, "Error: ${e.message}", Toast.LENGTH_LONG).show()
+                                    }
+                            }
+                        )
                     }
                 }
             }
@@ -130,6 +168,7 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun checkRestaurantProfile(ownerId: String, navController: NavController) {
+        // This function remains the same
         val db = Firebase.firestore
         db.collection("restaurants").document(ownerId).get()
             .addOnSuccessListener { document ->
