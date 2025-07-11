@@ -18,23 +18,20 @@ import androidx.compose.ui.unit.sp
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun AddMenuItemScreen(
+    // It now only needs the category name passed to it
+    category: String,
     onSaveItemClicked: (
         itemName: String,
-        price: String,
-        category: String
+        price: String
     ) -> Unit
 ) {
     var itemName by remember { mutableStateOf("") }
     var price by remember { mutableStateOf("") }
 
-    val categories = listOf("Pre-order Breakfast", "Pre-order Lunch", "Pre-order Dinner", "Current Menu")
-    var categoryExpanded by remember { mutableStateOf(false) }
-    var selectedCategory by remember { mutableStateOf(categories[0]) }
-
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Add New Menu Item") },
+                title = { Text("Add Item to $category") },
                 colors = TopAppBarDefaults.topAppBarColors(
                     containerColor = MaterialTheme.colorScheme.primary,
                     titleContentColor = Color.White
@@ -51,16 +48,14 @@ fun AddMenuItemScreen(
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
             Spacer(Modifier.height(16.dp))
-
             OutlinedTextField(
                 value = itemName,
                 onValueChange = { itemName = it },
-                label = { Text("Item Name (e.g., Chicken Biryani)") },
+                label = { Text("Item Name") },
                 modifier = Modifier.fillMaxWidth(),
                 singleLine = true
             )
             Spacer(Modifier.height(16.dp))
-
             OutlinedTextField(
                 value = price,
                 onValueChange = { price = it },
@@ -69,41 +64,9 @@ fun AddMenuItemScreen(
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                 singleLine = true
             )
-            Spacer(Modifier.height(16.dp))
-
-            ExposedDropdownMenuBox(
-                expanded = categoryExpanded,
-                onExpandedChange = { categoryExpanded = !categoryExpanded }
-            ) {
-                OutlinedTextField(
-                    value = selectedCategory,
-                    onValueChange = {},
-                    readOnly = true,
-                    label = { Text("Menu Category") },
-                    trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = categoryExpanded) },
-                    modifier = Modifier
-                        .menuAnchor()
-                        .fillMaxWidth()
-                )
-                ExposedDropdownMenu(
-                    expanded = categoryExpanded,
-                    onDismissRequest = { categoryExpanded = false }
-                ) {
-                    categories.forEach { category ->
-                        DropdownMenuItem(
-                            text = { Text(category) },
-                            onClick = {
-                                selectedCategory = category
-                                categoryExpanded = false
-                            }
-                        )
-                    }
-                }
-            }
             Spacer(Modifier.height(32.dp))
-
             Button(
-                onClick = { onSaveItemClicked(itemName, price, selectedCategory) },
+                onClick = { onSaveItemClicked(itemName, price) },
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(50.dp),

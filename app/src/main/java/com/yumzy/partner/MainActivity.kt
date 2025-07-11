@@ -13,9 +13,11 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavController
+import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
+import androidx.navigation.navArgument
 import com.google.android.gms.auth.api.identity.Identity
 import com.google.firebase.auth.ktx.auth
 import com.google.firebase.firestore.ktx.firestore
@@ -24,10 +26,16 @@ import com.yumzy.partner.auth.AuthScreen
 import com.yumzy.partner.auth.AuthViewModel
 import com.yumzy.partner.auth.GoogleAuthUiClient
 import com.yumzy.partner.features.dashboard.PartnerDashboardScreen
-import com.yumzy.partner.features.menu.AddMenuItemScreen // Import new screen
+import com.yumzy.partner.features.menu.AddMenuItemScreen
+import com.yumzy.partner.features.menu.CategoryDetailScreen
+import com.yumzy.partner.features.menu.CreateCategoryScreen
+import com.yumzy.partner.features.orders.OrderListScreen
 import com.yumzy.partner.features.profile.RestaurantProfileScreen
 import com.yumzy.partner.ui.theme.YumzyPartnerTheme
 import kotlinx.coroutines.launch
+import java.net.URLDecoder
+import java.net.URLEncoder
+import java.nio.charset.StandardCharsets
 
 class MainActivity : ComponentActivity() {
 
@@ -45,7 +53,6 @@ class MainActivity : ComponentActivity() {
                 val navController = rememberNavController()
 
                 NavHost(navController = navController, startDestination = "auth") {
-                    // ... "auth" and "create_profile" composables remain the same
 
                     composable("auth") {
                         val viewModel = viewModel<AuthViewModel>()
@@ -101,8 +108,8 @@ class MainActivity : ComponentActivity() {
                         }
                         RestaurantProfileScreen(onSaveClicked = { name, cuisine, servesDaffodil, servesNsu ->
                             val deliveryLocations = mutableListOf<String>()
-                            if(servesDaffodil) deliveryLocations.add("Daffodil Smart City")
-                            if(servesNsu) deliveryLocations.add("North South University")
+                            if (servesDaffodil) deliveryLocations.add("Daffodil Smart City")
+                            if (servesNsu) deliveryLocations.add("North South University")
 
                             val restaurantProfile = hashMapOf(
                                 "ownerId" to userId,
@@ -118,46 +125,123 @@ class MainActivity : ComponentActivity() {
                                     navController.navigate("dashboard") { popUpTo("auth") { inclusive = true } }
                                 }
                                 .addOnFailureListener { e ->
-                                    Toast.makeText(applicationContext, "Error: ${e.message}", Toast.LENGTH_LONG).show()
+                                    Toast.makeText(
+                                        applicationContext,
+                                        "Error: ${e.message}",
+                                        Toast.LENGTH_LONG
+                                    ).show()
                                 }
                         })
                     }
 
                     composable("dashboard") {
+                        val ownerId = Firebase.auth.currentUser?.uid
+                        if (ownerId == null) {
+                            navController.navigate("auth") { popUpTo("auth") { inclusive = true } }
+                            return@composable
+                        }
                         PartnerDashboardScreen(
-                            onNavigateToAddItem = {
-                                navController.navigate("add_item")
+                            onNavigateToCreateCategory = {
+                                navController.navigate("create_category")
+                            },
+                            onNavigateToAddItem = { category ->
+                                val encodedCategory = URLEncoder.encode(category, StandardCharsets.UTF_8.toString())
+                                navController.navigate("add_item/$encodedCategory")
+                            },
+                            onNavigateToCategoryDetail = { categoryName ->
+                                val encodedCategoryName = URLEncoder.encode(categoryName, StandardCharsets.UTF_8.toString())
+                                navController.navigate("category_detail/$encodedCategoryName")
+                            },
+                            onDeleteItem = { itemId ->
+                                deleteMenuItem(ownerId, itemId)
+                            },
+                            onDeleteCategory = { category ->
+                                deleteCategory(ownerId, category.id, "Pre-order ${category.name}")
                             }
                         )
                     }
 
-                    // NEW: Add the route and logic for the AddMenuItemScreen
-                    composable("add_item") {
-                        val ownerId = Firebase.auth.currentUser?.uid
-                        if(ownerId == null) {
-                            navController.navigate("auth") { popUpTo("auth") { inclusive = true } }
-                            return@composable
-                        }
+                    composable("create_category") {
+                        val ownerId = Firebase.auth.currentUser?.uid ?: return@composable
+
+                        CreateCategoryScreen(
+                            onSaveCategory = { categoryName, startTime, endTime, deliveryTime ->
+                                val categoryData = hashMapOf(
+                                    "name" to categoryName,
+                                    "startTime" to startTime,
+                                    "endTime" to endTime,
+                                    "deliveryTime" to deliveryTime
+                                )
+                                Firebase.firestore.collection("restaurants").document(ownerId)
+                                    .collection("preOrderCategories")
+                                    .add(categoryData)
+                                    .addOnSuccessListener {
+                                        Toast.makeText(applicationContext, "Category Saved", Toast.LENGTH_SHORT).show()
+                                        navController.popBackStack()
+                                    }
+                            }
+                        )
+                    }
+
+                    composable(
+                        "category_detail/{categoryName}",
+                        arguments = listOf(navArgument("categoryName") { type = NavType.StringType })
+                    ) { backStackEntry ->
+                        val ownerId = Firebase.auth.currentUser?.uid ?: return@composable
+                        val encodedCategoryName = backStackEntry.arguments?.getString("categoryName") ?: ""
+                        val categoryName = URLDecoder.decode(encodedCategoryName, StandardCharsets.UTF_8.toString())
+
+                        CategoryDetailScreen(
+                            categoryName = categoryName,
+                            onNavigateToAddItem = { category ->
+                                val encodedCategory = URLEncoder.encode(category, StandardCharsets.UTF_8.toString())
+                                navController.navigate("add_item/$encodedCategory")
+                            },
+                            onDeleteItem = { itemId ->
+                                deleteMenuItem(ownerId, itemId)
+                            },
+                            onNavigateToOrderList = { category ->
+                                val encodedCategory = URLEncoder.encode(category, StandardCharsets.UTF_8.toString())
+                                navController.navigate("order_list/$encodedCategory")
+                            }
+                        )
+                    }
+
+                    composable(
+                        "order_list/{categoryName}",
+                        arguments = listOf(navArgument("categoryName") { type = NavType.StringType })
+                    ) { backStackEntry ->
+                        val encodedCategoryName = backStackEntry.arguments?.getString("categoryName") ?: ""
+                        val categoryName = URLDecoder.decode(encodedCategoryName, StandardCharsets.UTF_8.toString())
+                        OrderListScreen(categoryName = categoryName)
+                    }
+
+                    composable(
+                        "add_item/{category}",
+                        arguments = listOf(navArgument("category") { type = NavType.StringType })
+                    ) { backStackEntry ->
+                        val ownerId = Firebase.auth.currentUser?.uid ?: return@composable
+                        val encodedCategory = backStackEntry.arguments?.getString("category") ?: "Current Menu"
+                        val category = URLDecoder.decode(encodedCategory, StandardCharsets.UTF_8.toString())
 
                         AddMenuItemScreen(
-                            onSaveItemClicked = { itemName, price, category ->
+                            category = category,
+                            onSaveItemClicked = { itemName, price ->
                                 val newItem = hashMapOf(
                                     "name" to itemName,
-                                    "price" to price.toDoubleOrNull(), // Convert price to number
-                                    "category" to category,
-                                    "isAvailable" to true // Default availability
+                                    "price" to price.toDoubleOrNull(),
+                                    "category" to category
                                 )
-
-                                // We save menu items in a "menuItems" subcollection inside the restaurant's document
                                 Firebase.firestore.collection("restaurants").document(ownerId)
                                     .collection("menuItems")
-                                    .add(newItem) // .add() creates a new document with a random ID
+                                    .add(newItem)
                                     .addOnSuccessListener {
-                                        Toast.makeText(applicationContext, "$itemName added!", Toast.LENGTH_SHORT).show()
-                                        navController.popBackStack() // Go back to the dashboard
-                                    }
-                                    .addOnFailureListener { e ->
-                                        Toast.makeText(applicationContext, "Error: ${e.message}", Toast.LENGTH_LONG).show()
+                                        Toast.makeText(
+                                            applicationContext,
+                                            "$itemName added!",
+                                            Toast.LENGTH_SHORT
+                                        ).show()
+                                        navController.popBackStack()
                                     }
                             }
                         )
@@ -168,18 +252,60 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun checkRestaurantProfile(ownerId: String, navController: NavController) {
-        // This function remains the same
         val db = Firebase.firestore
         db.collection("restaurants").document(ownerId).get()
             .addOnSuccessListener { document ->
                 if (document != null && document.exists()) {
-                    navController.navigate("dashboard") { popUpTo("auth") { inclusive = true } }
+                    navController.navigate("dashboard") {
+                        popUpTo("auth") { inclusive = true }
+                    }
                 } else {
-                    navController.navigate("create_profile") { popUpTo("auth") { inclusive = true } }
+                    navController.navigate("create_profile") {
+                        popUpTo("auth") { inclusive = true }
+                    }
                 }
             }
             .addOnFailureListener {
-                Toast.makeText(applicationContext, "Error checking profile.", Toast.LENGTH_LONG).show()
+                Toast.makeText(
+                    applicationContext,
+                    "Error checking profile.",
+                    Toast.LENGTH_LONG
+                ).show()
+            }
+    }
+
+    private fun deleteMenuItem(ownerId: String, itemId: String) {
+        Firebase.firestore.collection("restaurants").document(ownerId)
+            .collection("menuItems").document(itemId)
+            .delete()
+            .addOnSuccessListener {
+                Toast.makeText(applicationContext, "Item deleted", Toast.LENGTH_SHORT).show()
+            }
+            .addOnFailureListener {
+                Toast.makeText(applicationContext, "Error deleting item", Toast.LENGTH_SHORT).show()
+            }
+    }
+
+    private fun deleteCategory(ownerId: String, categoryId: String, categoryName: String) {
+        val db = Firebase.firestore
+        val restaurantRef = db.collection("restaurants").document(ownerId)
+
+        restaurantRef.collection("menuItems").whereEqualTo("category", categoryName).get()
+            .addOnSuccessListener { snapshot ->
+                val batch = db.batch()
+                for (document in snapshot.documents) {
+                    batch.delete(document.reference)
+                }
+                batch.commit().addOnSuccessListener {
+                    restaurantRef.collection("preOrderCategories").document(categoryId)
+                        .delete()
+                        .addOnSuccessListener {
+                            Toast.makeText(applicationContext, "Category deleted", Toast.LENGTH_SHORT).show()
+                        }
+                }
+            }
+            .addOnFailureListener {
+                Toast.makeText(applicationContext, "Error deleting category", Toast.LENGTH_SHORT).show()
             }
     }
 }
