@@ -30,6 +30,7 @@ import com.yumzy.partner.features.menu.AddMenuItemScreen
 import com.yumzy.partner.features.menu.CategoryDetailScreen
 import com.yumzy.partner.features.menu.CreateCategoryScreen
 import com.yumzy.partner.features.orders.OrderListScreen
+import com.yumzy.partner.features.profile.EditProfileScreen
 import com.yumzy.partner.features.profile.RestaurantProfileScreen
 import com.yumzy.partner.ui.theme.YumzyPartnerTheme
 import kotlinx.coroutines.launch
@@ -101,11 +102,7 @@ class MainActivity : ComponentActivity() {
                     }
 
                     composable("create_profile") {
-                        val userId = Firebase.auth.currentUser?.uid
-                        if (userId == null) {
-                            navController.navigate("auth") { popUpTo("auth") { inclusive = true } }
-                            return@composable
-                        }
+                        val userId = Firebase.auth.currentUser?.uid ?: return@composable
                         RestaurantProfileScreen(onSaveClicked = { name, cuisine, servesDaffodil, servesNsu ->
                             val deliveryLocations = mutableListOf<String>()
                             if (servesDaffodil) deliveryLocations.add("Daffodil Smart City")
@@ -124,26 +121,13 @@ class MainActivity : ComponentActivity() {
                                 .addOnSuccessListener {
                                     navController.navigate("dashboard") { popUpTo("auth") { inclusive = true } }
                                 }
-                                .addOnFailureListener { e ->
-                                    Toast.makeText(
-                                        applicationContext,
-                                        "Error: ${e.message}",
-                                        Toast.LENGTH_LONG
-                                    ).show()
-                                }
                         })
                     }
 
                     composable("dashboard") {
-                        val ownerId = Firebase.auth.currentUser?.uid
-                        if (ownerId == null) {
-                            navController.navigate("auth") { popUpTo("auth") { inclusive = true } }
-                            return@composable
-                        }
+                        val ownerId = Firebase.auth.currentUser?.uid ?: return@composable
                         PartnerDashboardScreen(
-                            onNavigateToCreateCategory = {
-                                navController.navigate("create_category")
-                            },
+                            onNavigateToCreateCategory = { navController.navigate("create_category") },
                             onNavigateToAddItem = { category ->
                                 val encodedCategory = URLEncoder.encode(category, StandardCharsets.UTF_8.toString())
                                 navController.navigate("add_item/$encodedCategory")
@@ -151,6 +135,9 @@ class MainActivity : ComponentActivity() {
                             onNavigateToCategoryDetail = { categoryName ->
                                 val encodedCategoryName = URLEncoder.encode(categoryName, StandardCharsets.UTF_8.toString())
                                 navController.navigate("category_detail/$encodedCategoryName")
+                            },
+                            onNavigateToEditProfile = {
+                                navController.navigate("edit_profile")
                             },
                             onDeleteItem = { itemId ->
                                 deleteMenuItem(ownerId, itemId)
@@ -161,9 +148,36 @@ class MainActivity : ComponentActivity() {
                         )
                     }
 
+                    composable("edit_profile") {
+                        val ownerId = Firebase.auth.currentUser?.uid ?: return@composable
+                        EditProfileScreen(
+                            onSaveChanges = { name, cuisine, imageUrl, servesDaffodil, servesNsu ->
+                                val deliveryLocations = mutableListOf<String>()
+                                if(servesDaffodil) deliveryLocations.add("Daffodil Smart City")
+                                if(servesNsu) deliveryLocations.add("North South University")
+
+                                // The updates map now includes the 'cuisine' field
+                                val updates = mapOf(
+                                    "name" to name,
+                                    "cuisine" to cuisine,
+                                    "imageUrl" to imageUrl,
+                                    "deliveryLocations" to deliveryLocations
+                                )
+                                Firebase.firestore.collection("restaurants").document(ownerId)
+                                    .update(updates)
+                                    .addOnSuccessListener {
+                                        Toast.makeText(applicationContext, "Profile Updated", Toast.LENGTH_SHORT).show()
+                                        navController.popBackStack()
+                                    }
+                                    .addOnFailureListener {
+                                        Toast.makeText(applicationContext, "Update Failed", Toast.LENGTH_SHORT).show()
+                                    }
+                            }
+                        )
+                    }
+
                     composable("create_category") {
                         val ownerId = Firebase.auth.currentUser?.uid ?: return@composable
-
                         CreateCategoryScreen(
                             onSaveCategory = { categoryName, startTime, endTime, deliveryTime ->
                                 val categoryData = hashMapOf(
@@ -197,12 +211,12 @@ class MainActivity : ComponentActivity() {
                                 val encodedCategory = URLEncoder.encode(category, StandardCharsets.UTF_8.toString())
                                 navController.navigate("add_item/$encodedCategory")
                             },
-                            onDeleteItem = { itemId ->
-                                deleteMenuItem(ownerId, itemId)
-                            },
                             onNavigateToOrderList = { category ->
                                 val encodedCategory = URLEncoder.encode(category, StandardCharsets.UTF_8.toString())
                                 navController.navigate("order_list/$encodedCategory")
+                            },
+                            onDeleteItem = { itemId ->
+                                deleteMenuItem(ownerId, itemId)
                             }
                         )
                     }
@@ -223,7 +237,6 @@ class MainActivity : ComponentActivity() {
                         val ownerId = Firebase.auth.currentUser?.uid ?: return@composable
                         val encodedCategory = backStackEntry.arguments?.getString("category") ?: "Current Menu"
                         val category = URLDecoder.decode(encodedCategory, StandardCharsets.UTF_8.toString())
-
                         AddMenuItemScreen(
                             category = category,
                             onSaveItemClicked = { itemName, price ->
@@ -265,13 +278,6 @@ class MainActivity : ComponentActivity() {
                     }
                 }
             }
-            .addOnFailureListener {
-                Toast.makeText(
-                    applicationContext,
-                    "Error checking profile.",
-                    Toast.LENGTH_LONG
-                ).show()
-            }
     }
 
     private fun deleteMenuItem(ownerId: String, itemId: String) {
@@ -280,9 +286,6 @@ class MainActivity : ComponentActivity() {
             .delete()
             .addOnSuccessListener {
                 Toast.makeText(applicationContext, "Item deleted", Toast.LENGTH_SHORT).show()
-            }
-            .addOnFailureListener {
-                Toast.makeText(applicationContext, "Error deleting item", Toast.LENGTH_SHORT).show()
             }
     }
 
@@ -303,9 +306,6 @@ class MainActivity : ComponentActivity() {
                             Toast.makeText(applicationContext, "Category deleted", Toast.LENGTH_SHORT).show()
                         }
                 }
-            }
-            .addOnFailureListener {
-                Toast.makeText(applicationContext, "Error deleting category", Toast.LENGTH_SHORT).show()
             }
     }
 }
