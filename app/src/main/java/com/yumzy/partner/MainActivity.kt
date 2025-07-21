@@ -109,11 +109,8 @@ class MainActivity : ComponentActivity() {
                             if (servesNsu) deliveryLocations.add("North South University")
 
                             val restaurantProfile = hashMapOf(
-                                "ownerId" to userId,
-                                "name" to name,
-                                "cuisine" to cuisine,
-                                "deliveryLocations" to deliveryLocations,
-                                "email" to (Firebase.auth.currentUser?.email ?: "")
+                                "ownerId" to userId, "name" to name, "cuisine" to cuisine,
+                                "deliveryLocations" to deliveryLocations, "email" to (Firebase.auth.currentUser?.email ?: "")
                             )
 
                             Firebase.firestore.collection("restaurants").document(userId)
@@ -156,11 +153,8 @@ class MainActivity : ComponentActivity() {
                                 if(servesDaffodil) deliveryLocations.add("Daffodil Smart City")
                                 if(servesNsu) deliveryLocations.add("North South University")
 
-                                // The updates map now includes the 'cuisine' field
                                 val updates = mapOf(
-                                    "name" to name,
-                                    "cuisine" to cuisine,
-                                    "imageUrl" to imageUrl,
+                                    "name" to name, "cuisine" to cuisine, "imageUrl" to imageUrl,
                                     "deliveryLocations" to deliveryLocations
                                 )
                                 Firebase.firestore.collection("restaurants").document(ownerId)
@@ -168,9 +162,6 @@ class MainActivity : ComponentActivity() {
                                     .addOnSuccessListener {
                                         Toast.makeText(applicationContext, "Profile Updated", Toast.LENGTH_SHORT).show()
                                         navController.popBackStack()
-                                    }
-                                    .addOnFailureListener {
-                                        Toast.makeText(applicationContext, "Update Failed", Toast.LENGTH_SHORT).show()
                                     }
                             }
                         )
@@ -181,16 +172,13 @@ class MainActivity : ComponentActivity() {
                         CreateCategoryScreen(
                             onSaveCategory = { categoryName, startTime, endTime, deliveryTime ->
                                 val categoryData = hashMapOf(
-                                    "name" to categoryName,
-                                    "startTime" to startTime,
-                                    "endTime" to endTime,
-                                    "deliveryTime" to deliveryTime
+                                    "name" to categoryName, "startTime" to startTime,
+                                    "endTime" to endTime, "deliveryTime" to deliveryTime
                                 )
                                 Firebase.firestore.collection("restaurants").document(ownerId)
                                     .collection("preOrderCategories")
                                     .add(categoryData)
                                     .addOnSuccessListener {
-                                        Toast.makeText(applicationContext, "Category Saved", Toast.LENGTH_SHORT).show()
                                         navController.popBackStack()
                                     }
                             }
@@ -227,9 +215,17 @@ class MainActivity : ComponentActivity() {
                     ) { backStackEntry ->
                         val encodedCategoryName = backStackEntry.arguments?.getString("categoryName") ?: ""
                         val categoryName = URLDecoder.decode(encodedCategoryName, StandardCharsets.UTF_8.toString())
-                        OrderListScreen(categoryName = categoryName)
+                        OrderListScreen(
+                            categoryName = categoryName,
+                            onBackClicked = { navController.popBackStack() },
+                            onAcceptOrder = { orderId -> updateOrderStatus(orderId, "Preparing") },
+                            onRejectOrder = { orderId -> updateOrderStatus(orderId, "Rejected") },
+                            onAcceptAllOrders = { orderIds -> updateAllOrdersStatus(orderIds, "Preparing") },
+                            onRejectAllOrders = { orderIds -> updateAllOrdersStatus(orderIds, "Rejected") }
+                        )
                     }
 
+                    // THIS IS THE CORRECTED CODE BLOCK
                     composable(
                         "add_item/{category}",
                         arguments = listOf(navArgument("category") { type = NavType.StringType })
@@ -237,23 +233,20 @@ class MainActivity : ComponentActivity() {
                         val ownerId = Firebase.auth.currentUser?.uid ?: return@composable
                         val encodedCategory = backStackEntry.arguments?.getString("category") ?: "Current Menu"
                         val category = URLDecoder.decode(encodedCategory, StandardCharsets.UTF_8.toString())
+
                         AddMenuItemScreen(
-                            category = category,
-                            onSaveItemClicked = { itemName, price ->
+                            category = category, // Correct parameter name
+                            onSaveItemClicked = { itemName, price -> // Correct lambda with 2 params
                                 val newItem = hashMapOf(
                                     "name" to itemName,
                                     "price" to price.toDoubleOrNull(),
-                                    "category" to category
+                                    "category" to category // Use the category from this scope
                                 )
                                 Firebase.firestore.collection("restaurants").document(ownerId)
                                     .collection("menuItems")
                                     .add(newItem)
                                     .addOnSuccessListener {
-                                        Toast.makeText(
-                                            applicationContext,
-                                            "$itemName added!",
-                                            Toast.LENGTH_SHORT
-                                        ).show()
+                                        Toast.makeText(applicationContext, "$itemName added!", Toast.LENGTH_SHORT).show()
                                         navController.popBackStack()
                                     }
                             }
@@ -264,9 +257,9 @@ class MainActivity : ComponentActivity() {
         }
     }
 
-    private fun checkRestaurantProfile(ownerId: String, navController: NavController) {
+    private fun checkRestaurantProfile(userId: String, navController: NavController) {
         val db = Firebase.firestore
-        db.collection("restaurants").document(ownerId).get()
+        db.collection("restaurants").document(userId).get()
             .addOnSuccessListener { document ->
                 if (document != null && document.exists()) {
                     navController.navigate("dashboard") {
@@ -307,5 +300,26 @@ class MainActivity : ComponentActivity() {
                         }
                 }
             }
+    }
+
+    private fun updateOrderStatus(orderId: String, newStatus: String) {
+        Firebase.firestore.collection("orders").document(orderId)
+            .update("orderStatus", newStatus)
+            .addOnSuccessListener {
+                Toast.makeText(applicationContext, "Order marked as $newStatus", Toast.LENGTH_SHORT).show()
+            }
+    }
+
+    private fun updateAllOrdersStatus(orderIds: List<String>, newStatus: String) {
+        if (orderIds.isEmpty()) return
+        val db = Firebase.firestore
+        val batch = db.batch()
+        orderIds.forEach { orderId ->
+            val docRef = db.collection("orders").document(orderId)
+            batch.update(docRef, "orderStatus", newStatus)
+        }
+        batch.commit().addOnSuccessListener {
+            Toast.makeText(applicationContext, "${orderIds.size} orders marked as $newStatus", Toast.LENGTH_SHORT).show()
+        }
     }
 }

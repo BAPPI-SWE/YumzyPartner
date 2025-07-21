@@ -18,28 +18,26 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.google.firebase.Timestamp
 import com.google.firebase.auth.ktx.auth
 import com.google.firebase.firestore.ktx.firestore
 import com.google.firebase.ktx.Firebase
 
-// --- DATA CLASSES (FROM YOUR FILE) ---
+// --- DATA CLASSES WITH DEFAULT VALUES ---
 data class PreOrderCategory(
-    val id: String,
-    val name: String,
-    val startTime: String,
-    val endTime: String,
-    val deliveryTime: String
+    val id: String = "",
+    val name: String = "",
+    val startTime: String = "",
+    val endTime: String = "",
+    val deliveryTime: String = ""
 )
 
 data class MenuItem(
-    val id: String,
-    val name: String,
-    val price: Double,
-    val category: String
+    val id: String = "",
+    val name: String = "",
+    val price: Double = 0.0,
+    val category: String = ""
 )
 
-// NEW: Data class to hold basic order info
 data class OrderInfo(
     val preOrderCategory: String = ""
 )
@@ -57,8 +55,6 @@ fun PartnerDashboardScreen(
     var preOrderCategories by remember { mutableStateOf<List<PreOrderCategory>>(emptyList()) }
     var allMenuItems by remember { mutableStateOf<List<MenuItem>>(emptyList()) }
     var isLoading by remember { mutableStateOf(true) }
-
-    // NEW: State to hold all incoming pre-orders
     var incomingPreOrders by remember { mutableStateOf<List<OrderInfo>>(emptyList()) }
 
     LaunchedEffect(key1 = Unit) {
@@ -69,13 +65,8 @@ fun PartnerDashboardScreen(
                 .addSnapshotListener { snapshot, _ ->
                     snapshot?.let {
                         preOrderCategories = it.documents.mapNotNull { doc ->
-                            PreOrderCategory(
-                                id = doc.id,
-                                name = doc.getString("name") ?: "",
-                                startTime = doc.getString("startTime") ?: "",
-                                endTime = doc.getString("endTime") ?: "",
-                                deliveryTime = doc.getString("deliveryTime") ?: ""
-                            )
+                            // This toObject() call is what was causing the crash
+                            doc.toObject(PreOrderCategory::class.java)?.copy(id = doc.id)
                         }
                     }
                     isLoading = false
@@ -84,17 +75,10 @@ fun PartnerDashboardScreen(
                 .addSnapshotListener { snapshot, _ ->
                     snapshot?.let {
                         allMenuItems = it.documents.mapNotNull { doc ->
-                            MenuItem(
-                                id = doc.id,
-                                name = doc.getString("name") ?: "",
-                                price = doc.getDouble("price") ?: 0.0,
-                                category = doc.getString("category") ?: ""
-                            )
+                            doc.toObject(MenuItem::class.java)?.copy(id = doc.id)
                         }
                     }
                 }
-
-            // NEW: Listener for incoming pre-orders
             db.collection("orders")
                 .whereEqualTo("restaurantId", ownerId)
                 .whereEqualTo("orderType", "PreOrder")
@@ -144,11 +128,10 @@ fun PartnerDashboardScreen(
                 item { Text("Pre-Order", fontSize = 22.sp, fontWeight = FontWeight.Bold) }
 
                 items(preOrderCategories) { category ->
-                    // Calculate the order count for this specific category
                     val orderCount = incomingPreOrders.count { it.preOrderCategory == "Pre-order ${category.name}" }
                     PreOrderCategoryCard(
                         category = category,
-                        orderCount = orderCount, // Pass the count to the card
+                        orderCount = orderCount,
                         onClick = { onNavigateToCategoryDetail("Pre-order ${category.name}") },
                         onDelete = { onDeleteCategory(category) }
                     )
@@ -163,7 +146,6 @@ fun PartnerDashboardScreen(
                 }
 
                 item { Divider(modifier = Modifier.padding(vertical = 16.dp)) }
-
                 item { Text("Current Menu", fontSize = 22.sp, fontWeight = FontWeight.Bold) }
 
                 if (currentMenuItems.isEmpty()) {
@@ -188,7 +170,6 @@ fun PartnerDashboardScreen(
     }
 }
 
-// UPDATED: PreOrderCategoryCard now accepts an orderCount
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun PreOrderCategoryCard(category: PreOrderCategory, orderCount: Int, onClick: () -> Unit, onDelete: () -> Unit) {
@@ -200,25 +181,24 @@ fun PreOrderCategoryCard(category: PreOrderCategory, orderCount: Int, onClick: (
             modifier = Modifier.fillMaxWidth().padding(start = 16.dp, top = 16.dp, bottom = 16.dp, end = 8.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Column(modifier = Modifier.weight(1f)) {
-                Text(text = category.name, fontWeight = FontWeight.Bold, fontSize = 18.sp)
-                Text(text = "Order: ${category.startTime} - ${category.endTime}", color = Color.Gray, fontSize = 14.sp)
-                Text(text = "Delivery: ${category.deliveryTime}", color = Color.Gray, fontSize = 14.sp)
-            }
-
-            // NEW: The order badge and button
             BadgedBox(
                 badge = {
                     if(orderCount > 0) {
                         Badge { Text("$orderCount") }
                     }
                 },
-                modifier = Modifier.padding(horizontal = 8.dp)
+                modifier = Modifier.padding(end = 8.dp)
             ) {
                 Icon(Icons.Default.ReceiptLong, contentDescription = "View Orders")
             }
-
-            Icon(Icons.Default.ChevronRight, contentDescription = "View Category")
+            Column(modifier = Modifier.weight(1f)) {
+                Text(text = category.name, fontWeight = FontWeight.Bold, fontSize = 18.sp)
+                Text(text = "Order: ${category.startTime} - ${category.endTime}", color = Color.Gray, fontSize = 14.sp)
+                Text(text = "Delivery: ${category.deliveryTime}", color = Color.Gray, fontSize = 14.sp)
+            }
+            IconButton(onClick = onClick) { // Make the entire row clickable, this can be for navigation
+                Icon(Icons.Default.ChevronRight, contentDescription = "View Category")
+            }
             IconButton(onClick = onDelete) {
                 Icon(Icons.Default.Delete, contentDescription = "Delete Category", tint = Color.Gray)
             }
