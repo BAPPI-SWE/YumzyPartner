@@ -1,15 +1,22 @@
 package com.yumzy.partner.features.orders
 
+import android.content.Context
+import android.os.Build
+import android.print.PrintAttributes
+import android.print.PrintManager
+import android.webkit.WebView
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.Print
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.google.firebase.Timestamp
@@ -19,19 +26,21 @@ import com.google.firebase.ktx.Firebase
 import java.text.SimpleDateFormat
 import java.util.*
 
-// Data class to represent a complete Order
+// Data class to represent an Order (from your code)
 data class Order(
     val id: String = "",
     val userName: String = "",
     val userPhone: String = "",
-    val fullAddress: String = "",
+    val userBaseLocation: String = "",
     val userSubLocation: String = "",
+    val fullAddress: String = "",
     val totalPrice: Double = 0.0,
+    val orderStatus: String = "",
     val items: List<Map<String, Any>> = emptyList(),
     val createdAt: Timestamp = Timestamp.now()
 )
 
-// Data class for the aggregated item counts
+// Data class for the aggregated item counts (from your code)
 data class ItemSummary(
     val name: String,
     val quantity: Long
@@ -50,8 +59,6 @@ fun OrderListScreen(
     var allOrders by remember { mutableStateOf<List<Order>>(emptyList()) }
     var itemSummary by remember { mutableStateOf<List<ItemSummary>>(emptyList()) }
     var isLoading by remember { mutableStateOf(true) }
-
-    // State for dynamic location filtering
     var locationFilters by remember { mutableStateOf<List<String>>(listOf("All")) }
     var selectedLocation by remember { mutableStateOf("All") }
 
@@ -59,17 +66,16 @@ fun OrderListScreen(
         if (selectedLocation == "All") allOrders else allOrders.filter { it.userSubLocation == selectedLocation }
     }
 
-    // This effect fetches all necessary data: locations and orders
+    val context = LocalContext.current
+
     LaunchedEffect(key1 = categoryName) {
         val restaurantId = Firebase.auth.currentUser?.uid
         if (restaurantId != null) {
             val db = Firebase.firestore
-            // First, get the restaurant's serviceable locations to build the filter
             db.collection("restaurants").document(restaurantId).get()
                 .addOnSuccessListener { restaurantDoc ->
                     val locations = restaurantDoc.get("deliveryLocations") as? List<String> ?: emptyList()
                     if (locations.isNotEmpty()) {
-                        // Now fetch the sub-locations for those base locations
                         db.collection("locations").whereIn("name", locations).get()
                             .addOnSuccessListener { locationDocs ->
                                 val subLocs = locationDocs.flatMap { it.get("subLocations") as? List<String> ?: emptyList() }.distinct()
@@ -78,7 +84,6 @@ fun OrderListScreen(
                     }
                 }
 
-            // Fetch all pending orders for this category
             db.collection("orders")
                 .whereEqualTo("restaurantId", restaurantId)
                 .whereEqualTo("preOrderCategory", categoryName)
@@ -95,7 +100,6 @@ fun OrderListScreen(
         }
     }
 
-    // This effect calculates the item summary whenever the filtered list changes
     LaunchedEffect(filteredOrders) {
         val summaryMap = mutableMapOf<String, Long>()
         filteredOrders.forEach { order ->
@@ -115,6 +119,20 @@ fun OrderListScreen(
                 navigationIcon = {
                     IconButton(onClick = onBackClicked) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+                    }
+                },
+                actions = {
+                    // This is the new Print button
+                    IconButton(
+                        onClick = {
+                            if (filteredOrders.isNotEmpty()) {
+                                val printableContent = formatOrdersToHtml(filteredOrders, itemSummary, categoryName, selectedLocation)
+                                printOrders(context, printableContent)
+                            }
+                        },
+                        enabled = filteredOrders.isNotEmpty()
+                    ) {
+                        Icon(Icons.Default.Print, contentDescription = "Print Orders")
                     }
                 }
             )
@@ -232,4 +250,90 @@ fun OrderCard(order: Order, onAccept: () -> Unit, onReject: () -> Unit) {
             }
         }
     }
+}
+
+// This function takes the order data and formats it into a professional HTML string
+private fun formatOrdersToHtml(orders: List<Order>, summary: List<ItemSummary>, category: String, location: String): String {
+    val sdf = SimpleDateFormat("dd-MMM-yyyy", Locale.getDefault())
+    val date = sdf.format(Date())
+    val locationFilter = if (location == "All") "All Locations" else location
+    val categoryName = category.removePrefix("Pre-order ")
+
+    val builder = StringBuilder()
+    builder.append("""
+        <html>
+        <head>
+            <style>
+                body { font-family: sans-serif; margin: 20px; }
+                .header { text-align: center; border-bottom: 2px solid #333; padding-bottom: 10px; margin-bottom: 20px; }
+                h1 { margin: 0; }
+                h2, h3, h4 { margin-top: 20px; margin-bottom: 10px; }
+                table { width: 100%; border-collapse: collapse; }
+                th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
+                th { background-color: #f2f2f2; }
+                .order-card { border: 1px solid #ccc; border-radius: 8px; padding: 15px; margin-top: 20px; page-break-inside: avoid; }
+                hr { border: 0; border-top: 1px dashed #ccc; margin: 20px 0; }
+            </style>
+        </head>
+        <body>
+            <div class='header'>
+                <h1>Order Production Sheet</h1>
+                <h2>Category: $categoryName</h2>
+                <p>Date: $date | Location Filter: $locationFilter</p>
+            </div>
+
+            <h3>Total Items to Prepare</h3>
+            <table>
+                <tr><th>Item Name</th><th>Total Quantity</th></tr>
+    """.trimIndent())
+
+    summary.forEach {
+        builder.append("<tr><td>${it.name}</td><td>${it.quantity}</td></tr>")
+    }
+
+    builder.append("""
+            </table>
+            <hr>
+            <h2>Individual Orders (${orders.size})</h2>
+    """.trimIndent())
+
+    orders.forEach { order ->
+        builder.append("<div class='order-card'>")
+        builder.append("<h4>Customer: ${order.userName}</h4>")
+        builder.append("<p><b>Contact:</b> ${order.userPhone}<br/>")
+        builder.append("<b>Address:</b> ${order.fullAddress.replace("\n", "<br/>")}</p>")
+        builder.append("<table><tr><th>Item</th><th>Qty</th></tr>")
+        order.items.forEach { item ->
+            builder.append("<tr><td>${item["itemName"]}</td><td>${item["quantity"]}</td></tr>")
+        }
+        builder.append("</table>")
+        builder.append("<p><b>Total: ৳${order.totalPrice}</b></p>")
+        builder.append("</div>")
+    }
+
+    builder.append("</body></html>")
+    return builder.toString()
+}
+
+// This function uses the Android system's PrintManager to create the print job
+private fun printOrders(context: Context, htmlContent: String) {
+    val webView = WebView(context).apply {
+        loadDataWithBaseURL(null, htmlContent, "text/HTML", "UTF-8", null)
+    }
+
+    val printManager = context.getSystemService(Context.PRINT_SERVICE) as PrintManager
+    val jobName = "Yumzy_Orders_${System.currentTimeMillis()}"
+
+    val printAdapter = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
+        webView.createPrintDocumentAdapter(jobName)
+    } else {
+        @Suppress("DEPRECATION")
+        webView.createPrintDocumentAdapter()
+    }
+
+    printManager.print(
+        jobName,
+        printAdapter,
+        PrintAttributes.Builder().build()
+    )
 }
