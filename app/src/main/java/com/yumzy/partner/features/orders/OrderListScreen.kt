@@ -268,18 +268,60 @@ private fun formatOrdersToHtml(orders: List<Order>, summary: List<ItemSummary>, 
                 .header { text-align: center; border-bottom: 2px solid #333; padding-bottom: 10px; margin-bottom: 20px; }
                 h1 { margin: 0; }
                 h2, h3, h4 { margin-top: 20px; margin-bottom: 10px; }
+
+                /* summary table styling (unchanged) */
                 table { width: 100%; border-collapse: collapse; }
                 th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
                 th { background-color: #f2f2f2; }
-                .order-card { border: 1px solid #ccc; border-radius: 8px; padding: 15px; margin-top: 20px; page-break-inside: avoid; }
-                hr { border: 0; border-top: 1px dashed #ccc; margin: 20px 0; }
+
+                /* container for all the little tickets */
+                .orders-container {
+                  display: flex;
+                  flex-wrap: wrap;
+                  justify-content: space-between;
+                  margin-top: 20px;
+                }
+
+                /* each ticket card */
+                .order-card {
+                  box-sizing: border-box;
+                  width: 25%;           /* three across */
+                  margin-bottom: 20px;  /* space between rows */
+                  border: 1px solid #ccc;
+                  border-radius: 8px;
+                  padding: 10px;
+                  page-break-inside: avoid;
+                }
+
+                .order-card .info {
+                  margin-bottom: 10px;
+                  line-height: 1.4;
+                }
+
+                .order-card .items {
+                  margin-bottom: 10px;
+                }
+
+                .order-card .items ul {
+                  padding-left: 20px;
+                  margin: 0;
+                }
+
+                .order-card .items li {
+                  margin-bottom: 4px;
+                }
+
+                .order-card .total {
+                  font-weight: bold;
+                  text-align: right;
+                }
             </style>
         </head>
         <body>
-            <div class='header'>
+            <div class="header">
                 <h1>Order Production Sheet</h1>
                 <h2>Category: $categoryName</h2>
-                <p>Date: $date | Location Filter: $locationFilter</p>
+                <p>Date: $date | Location Filter: $locationFilter</p>
             </div>
 
             <h3>Total Items to Prepare</h3>
@@ -295,25 +337,49 @@ private fun formatOrdersToHtml(orders: List<Order>, summary: List<ItemSummary>, 
             </table>
             <hr>
             <h2>Individual Orders (${orders.size})</h2>
+
+            <div class="orders-container">
     """.trimIndent())
 
     orders.forEach { order ->
-        builder.append("<div class='order-card'>")
-        builder.append("<h4>Customer: ${order.userName}</h4>")
-        builder.append("<p><b>Contact:</b> ${order.userPhone}<br/>")
-        builder.append("<b>Address:</b> ${order.fullAddress.replace("\n", "<br/>")}</p>")
-        builder.append("<table><tr><th>Item</th><th>Qty</th></tr>")
+        builder.append("""
+            <div class="order-card">
+              <!-- top info block -->
+              <div class="info">
+                Name: ${order.userName}<br/>
+                Contact: ${order.userPhone}<br/>
+                Address: ${order.fullAddress.replace("\n","<br/>")}
+              </div>
+
+              <!-- items list -->
+              <div class="items">
+                <strong>Items:</strong>
+                <ul>
+        """.trimIndent())
+
         order.items.forEach { item ->
-            builder.append("<tr><td>${item["itemName"]}</td><td>${item["quantity"]}</td></tr>")
+            builder.append("<li>${item["itemName"]} x ${item["quantity"]}</li>")
         }
-        builder.append("</table>")
-        builder.append("<p><b>Total: ৳${order.totalPrice}</b></p>")
-        builder.append("</div>")
+
+        builder.append("""
+                </ul>
+              </div>
+
+              <!-- total -->
+              <div class="total">Total: ৳${order.totalPrice}</div>
+            </div>
+        """.trimIndent())
     }
 
-    builder.append("</body></html>")
+    builder.append("""
+            </div> <!-- .orders-container -->
+        </body>
+        </html>
+    """.trimIndent())
+
     return builder.toString()
 }
+
 
 // This function uses the Android system's PrintManager to create the print job
 private fun printOrders(context: Context, htmlContent: String) {

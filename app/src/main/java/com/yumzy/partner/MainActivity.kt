@@ -218,9 +218,9 @@ class MainActivity : ComponentActivity() {
                         OrderListScreen(
                             categoryName = categoryName,
                             onBackClicked = { navController.popBackStack() },
-                            onAcceptOrder = { orderId -> updateOrderStatus(orderId, "Preparing") },
+                            onAcceptOrder = { orderId -> updateOrderStatus(orderId, "Accepted") },
                             onRejectOrder = { orderId -> updateOrderStatus(orderId, "Rejected") },
-                            onAcceptAllOrders = { orderIds -> updateAllOrdersStatus(orderIds, "Preparing") },
+                            onAcceptAllOrders = { orderIds -> updateAllOrdersStatus(orderIds, "Accepted") },
                             onRejectAllOrders = { orderIds -> updateAllOrdersStatus(orderIds, "Rejected") }
                         )
                     }
