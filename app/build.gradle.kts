@@ -92,4 +92,8 @@ dependencies {
 
     debugImplementation("androidx.compose.ui:ui-tooling")
     debugImplementation("androidx.compose.ui:ui-test-manifest")
+
+    // Add this for calling Cloud Functions
+    implementation("com.google.firebase:firebase-functions-ktx")
+
 }

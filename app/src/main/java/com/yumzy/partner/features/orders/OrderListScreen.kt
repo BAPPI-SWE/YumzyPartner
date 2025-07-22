@@ -5,12 +5,15 @@ import android.os.Build
 import android.print.PrintAttributes
 import android.print.PrintManager
 import android.webkit.WebView
+import android.widget.Toast
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Print
+import androidx.compose.material.icons.filled.Send
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -22,11 +25,12 @@ import androidx.compose.ui.unit.dp
 import com.google.firebase.Timestamp
 import com.google.firebase.auth.ktx.auth
 import com.google.firebase.firestore.ktx.firestore
+import com.google.firebase.functions.ktx.functions
 import com.google.firebase.ktx.Firebase
 import java.text.SimpleDateFormat
 import java.util.*
 
-// Data class to represent an Order (from your code)
+// Your data classes are correct
 data class Order(
     val id: String = "",
     val userName: String = "",
@@ -40,11 +44,7 @@ data class Order(
     val createdAt: Timestamp = Timestamp.now()
 )
 
-// Data class for the aggregated item counts (from your code)
-data class ItemSummary(
-    val name: String,
-    val quantity: Long
-)
+data class ItemSummary(val name: String, val quantity: Long)
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -61,11 +61,15 @@ fun OrderListScreen(
     var isLoading by remember { mutableStateOf(true) }
     var locationFilters by remember { mutableStateOf<List<String>>(listOf("All")) }
     var selectedLocation by remember { mutableStateOf("All") }
+    var restaurantName by remember { mutableStateOf("") }
+
+    // NEW: State for the custom notification
+    var customMessage by remember { mutableStateOf("") }
+    var isSending by remember { mutableStateOf(false) }
 
     val filteredOrders = remember(allOrders, selectedLocation) {
         if (selectedLocation == "All") allOrders else allOrders.filter { it.userSubLocation == selectedLocation }
     }
-
     val context = LocalContext.current
 
     LaunchedEffect(key1 = categoryName) {
@@ -74,6 +78,7 @@ fun OrderListScreen(
             val db = Firebase.firestore
             db.collection("restaurants").document(restaurantId).get()
                 .addOnSuccessListener { restaurantDoc ->
+                    restaurantName = restaurantDoc.getString("name") ?: "Your Restaurant"
                     val locations = restaurantDoc.get("deliveryLocations") as? List<String> ?: emptyList()
                     if (locations.isNotEmpty()) {
                         db.collection("locations").whereIn("name", locations).get()
@@ -87,14 +92,14 @@ fun OrderListScreen(
             db.collection("orders")
                 .whereEqualTo("restaurantId", restaurantId)
                 .whereEqualTo("preOrderCategory", categoryName)
-                .whereEqualTo("orderStatus", "Pending")
                 .addSnapshotListener { snapshot, _ ->
                     isLoading = false
                     snapshot?.let {
-                        allOrders = it.documents.mapNotNull { doc ->
+                        val orders = it.documents.mapNotNull { doc ->
                             val address = "Building: ${doc.getString("building")}, Floor: ${doc.getString("floor")}, Room: ${doc.getString("room")}\n${doc.getString("userSubLocation")}, ${doc.getString("userBaseLocation")}"
                             doc.toObject(Order::class.java)?.copy(id = doc.id, fullAddress = address)
-                        }.sortedBy { it.createdAt }
+                        }
+                        allOrders = orders
                     }
                 }
         }
@@ -109,20 +114,47 @@ fun OrderListScreen(
                 summaryMap[name] = (summaryMap[name] ?: 0L) + quantity
             }
         }
-        itemSummary = summaryMap.map { ItemSummary(it.key, it.value) }.sortedByDescending { it.quantity }
+        itemSummary = summaryMap.map { ItemSummary(it.key, it.value) }
+    }
+
+    fun sendNotification() {
+        if (customMessage.isBlank()) {
+            Toast.makeText(context, "Please enter a message", Toast.LENGTH_SHORT).show()
+            return
+        }
+        if (filteredOrders.isEmpty()) {
+            Toast.makeText(context, "No users to notify for this filter", Toast.LENGTH_SHORT).show()
+            return
+        }
+        isSending = true
+        val functions = Firebase.functions
+        val orderIds = filteredOrders.map { it.id }
+
+        val data = hashMapOf(
+            "orderIds" to orderIds,
+            "message" to customMessage,
+            "restaurantName" to restaurantName
+        )
+
+        functions.getHttpsCallable("sendNotificationToFilteredUsers")
+            .call(data)
+            .addOnCompleteListener { task ->
+                isSending = false
+                if (task.isSuccessful) {
+                    Toast.makeText(context, "Notifications sent!", Toast.LENGTH_SHORT).show()
+                    customMessage = ""
+                } else {
+                    Toast.makeText(context, "Error: ${task.exception?.message}", Toast.LENGTH_LONG).show()
+                }
+            }
     }
 
     Scaffold(
         topBar = {
             TopAppBar(
                 title = { Text("Orders for ${categoryName.removePrefix("Pre-order ")}") },
-                navigationIcon = {
-                    IconButton(onClick = onBackClicked) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
-                    }
-                },
+                navigationIcon = { IconButton(onClick = onBackClicked) { Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back") } },
                 actions = {
-                    // This is the new Print button
                     IconButton(
                         onClick = {
                             if (filteredOrders.isNotEmpty()) {
@@ -138,67 +170,83 @@ fun OrderListScreen(
             )
         }
     ) { paddingValues ->
-        Column(Modifier.fillMaxSize().padding(paddingValues).padding(16.dp)) {
-            Card {
-                Column(Modifier.padding(16.dp)) {
-                    Text("Item Summary", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-                    Spacer(Modifier.height(8.dp))
-                    if (itemSummary.isEmpty() && !isLoading) Text("No pending orders found.")
-                    else {
-                        itemSummary.forEach {
-                            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                                Text(it.name, fontWeight = FontWeight.SemiBold)
-                                Text("${it.quantity} orders")
+        LazyColumn(
+            modifier = Modifier.fillMaxSize().padding(paddingValues),
+            contentPadding = PaddingValues(16.dp),
+            verticalArrangement = Arrangement.spacedBy(16.dp)
+        ) {
+            item {
+                Card {
+                    Column(Modifier.padding(16.dp)) {
+                        Text("Item Summary", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                        Spacer(Modifier.height(8.dp))
+                        if (itemSummary.isEmpty() && !isLoading) Text("No pending orders found.")
+                        else {
+                            itemSummary.forEach {
+                                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                                    Text(it.name, fontWeight = FontWeight.SemiBold)
+                                    Text("${it.quantity} orders")
+                                }
                             }
                         }
                     }
                 }
             }
-            Spacer(Modifier.height(16.dp))
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                FilterDropdown(
-                    selectedLocation = selectedLocation,
-                    options = locationFilters,
-                    onSelectionChanged = { selectedLocation = it },
-                    modifier = Modifier.weight(1f)
-                )
+            item {
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    FilterDropdown(selectedLocation = selectedLocation, options = locationFilters, onSelectionChanged = { selectedLocation = it }, modifier = Modifier.weight(1f))
+                }
             }
-            Spacer(Modifier.height(16.dp))
-            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)){
-                Button(
-                    onClick = { onAcceptAllOrders(filteredOrders.map { it.id }) },
-                    enabled = filteredOrders.isNotEmpty(),
-                    modifier = Modifier.weight(1f)
-                ) { Text("Accept All") }
-                OutlinedButton(
-                    onClick = { onRejectAllOrders(filteredOrders.map { it.id }) },
-                    enabled = filteredOrders.isNotEmpty(),
-                    modifier = Modifier.weight(1f),
-                    colors = ButtonDefaults.outlinedButtonColors(contentColor = Color.Red)
-                ) { Text("Reject All") }
+            item {
+                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Button(onClick = { onAcceptAllOrders(filteredOrders.map { it.id }) }, enabled = filteredOrders.isNotEmpty(), modifier = Modifier.weight(1f)) { Text("Accept All") }
+                    OutlinedButton(onClick = { onRejectAllOrders(filteredOrders.map { it.id }) }, enabled = filteredOrders.isNotEmpty(), modifier = Modifier.weight(1f), colors = ButtonDefaults.outlinedButtonColors(contentColor = Color.Red)) { Text("Reject All") }
+                }
             }
-            Spacer(Modifier.height(8.dp))
-            Text("Filtered Orders (${filteredOrders.size})", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-            Spacer(Modifier.height(8.dp))
+
+            // NEW: Card for sending notifications
+            item {
+                Card(modifier = Modifier.fillMaxWidth()) {
+                    Column(modifier = Modifier.padding(16.dp)) {
+                        Text("Send Custom Notification", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                        Text("Send a message to all users in the filtered list below.", style = MaterialTheme.typography.bodySmall, color = Color.Gray)
+                        Spacer(Modifier.height(8.dp))
+                        OutlinedTextField(value = customMessage, onValueChange = { customMessage = it }, label = { Text("Your message...") }, placeholder = { Text("e.g., Your food is ready!") }, modifier = Modifier.fillMaxWidth())
+                        Spacer(Modifier.height(8.dp))
+                        Button(
+                            onClick = { sendNotification() },
+                            enabled = filteredOrders.isNotEmpty() && !isSending,
+                            modifier = Modifier.align(Alignment.End)
+                        ) {
+                            if (isSending) {
+                                CircularProgressIndicator(modifier = Modifier.size(24.dp), color = Color.White, strokeWidth = 2.dp)
+                            } else {
+                                Icon(Icons.Default.Send, contentDescription = "Send")
+                                Spacer(Modifier.width(8.dp))
+                                Text("Send to ${filteredOrders.size} users")
+                            }
+                        }
+                    }
+                }
+            }
+
+            item {
+                Text("Filtered Orders (${filteredOrders.size})", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+            }
 
             if (isLoading) {
-                Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { CircularProgressIndicator() }
-            } else if (filteredOrders.isEmpty()){
-                Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { Text("No orders match the current filter.") }
+                item { Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) { CircularProgressIndicator() } }
+            } else if (filteredOrders.isEmpty()) {
+                item { Box(Modifier.fillMaxWidth().padding(32.dp), contentAlignment = Alignment.Center) { Text("No orders match the current filter.") } }
             } else {
-                LazyColumn(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                    items(filteredOrders) { order ->
-                        OrderCard(
-                            order = order,
-                            onAccept = { onAcceptOrder(order.id) },
-                            onReject = { onRejectOrder(order.id) }
-                        )
-                    }
+                items(filteredOrders) { order ->
+                    OrderCard(order = order, onAccept = { onAcceptOrder(order.id) }, onReject = { onRejectOrder(order.id) })
                 }
             }
         }
     }
 }
+// ... (FilterDropdown, OrderCard, and Print functions are unchanged)
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
