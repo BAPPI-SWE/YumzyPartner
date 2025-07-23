@@ -208,7 +208,7 @@ fun OrderListScreen(
             item {
                 Card(modifier = Modifier.fillMaxWidth()) {
                     Column(modifier = Modifier.padding(16.dp)) {
-                        Text("Send Custom Notification", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                        Text("Send Custom Notifications", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
                         Text("Send a message to all users in the filtered list below.", style = MaterialTheme.typography.bodySmall, color = Color.Gray)
                         Spacer(Modifier.height(8.dp))
                         OutlinedTextField(value = customMessage, onValueChange = { customMessage = it }, label = { Text("Your message...") }, placeholder = { Text("e.g., Your food is ready!") }, modifier = Modifier.fillMaxWidth())
