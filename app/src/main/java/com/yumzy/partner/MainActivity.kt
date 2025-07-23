@@ -103,14 +103,11 @@ class MainActivity : ComponentActivity() {
 
                     composable("create_profile") {
                         val userId = Firebase.auth.currentUser?.uid ?: return@composable
-                        RestaurantProfileScreen(onSaveClicked = { name, cuisine, servesDaffodil, servesNsu ->
-                            val deliveryLocations = mutableListOf<String>()
-                            if (servesDaffodil) deliveryLocations.add("Daffodil Smart City")
-                            if (servesNsu) deliveryLocations.add("North South University")
-
+                        RestaurantProfileScreen(onSaveClicked = { name, cuisine, deliveryLocations ->
                             val restaurantProfile = hashMapOf(
                                 "ownerId" to userId, "name" to name, "cuisine" to cuisine,
-                                "deliveryLocations" to deliveryLocations, "email" to (Firebase.auth.currentUser?.email ?: "")
+                                "deliveryLocations" to deliveryLocations, // Updated
+                                "email" to (Firebase.auth.currentUser?.email ?: "")
                             )
 
                             Firebase.firestore.collection("restaurants").document(userId)
@@ -148,14 +145,12 @@ class MainActivity : ComponentActivity() {
                     composable("edit_profile") {
                         val ownerId = Firebase.auth.currentUser?.uid ?: return@composable
                         EditProfileScreen(
-                            onSaveChanges = { name, cuisine, imageUrl, servesDaffodil, servesNsu ->
-                                val deliveryLocations = mutableListOf<String>()
-                                if(servesDaffodil) deliveryLocations.add("Daffodil Smart City")
-                                if(servesNsu) deliveryLocations.add("North South University")
-
+                            onSaveChanges = { name, cuisine, imageUrl, deliveryLocations ->
                                 val updates = mapOf(
-                                    "name" to name, "cuisine" to cuisine, "imageUrl" to imageUrl,
-                                    "deliveryLocations" to deliveryLocations
+                                    "name" to name,
+                                    "cuisine" to cuisine,
+                                    "imageUrl" to imageUrl,
+                                    "deliveryLocations" to deliveryLocations // Updated
                                 )
                                 Firebase.firestore.collection("restaurants").document(ownerId)
                                     .update(updates)
@@ -166,6 +161,8 @@ class MainActivity : ComponentActivity() {
                             }
                         )
                     }
+
+                    // ... (rest of the NavHost remains the same)
 
                     composable("create_category") {
                         val ownerId = Firebase.auth.currentUser?.uid ?: return@composable
@@ -225,7 +222,6 @@ class MainActivity : ComponentActivity() {
                         )
                     }
 
-                    // THIS IS THE CORRECTED CODE BLOCK
                     composable(
                         "add_item/{category}",
                         arguments = listOf(navArgument("category") { type = NavType.StringType })
@@ -235,12 +231,15 @@ class MainActivity : ComponentActivity() {
                         val category = URLDecoder.decode(encodedCategory, StandardCharsets.UTF_8.toString())
 
                         AddMenuItemScreen(
-                            category = category, // Correct parameter name
-                            onSaveItemClicked = { itemName, price -> // Correct lambda with 2 params
+                            category = category,
+                            onSaveItemClicked = { itemName, price ->
+                                // In MainActivity.kt, inside composable("add_item/{category}")
+
                                 val newItem = hashMapOf(
                                     "name" to itemName,
-                                    "price" to price.toDoubleOrNull(),
-                                    "category" to category // Use the category from this scope
+                                    // Use the Elvis operator to default to 0.0 if conversion to Double fails
+                                    "price" to (price.toDoubleOrNull() ?: 0.0),
+                                    "category" to category
                                 )
                                 Firebase.firestore.collection("restaurants").document(ownerId)
                                     .collection("menuItems")
@@ -256,6 +255,8 @@ class MainActivity : ComponentActivity() {
             }
         }
     }
+
+    // ... (rest of MainActivity functions remain the same)
 
     private fun checkRestaurantProfile(userId: String, navController: NavController) {
         val db = Firebase.firestore
