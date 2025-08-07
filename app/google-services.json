@@ -7,17 +7,17 @@
   "client": [
     {
       "client_info": {
-        "mobilesdk_app_id": "1:1096387078386:android:bf66457d4c7ed11566886b",
+        "mobilesdk_app_id": "1:1096387078386:android:a909f0578eabb7ed66886b",
         "android_client_info": {
-          "package_name": "com.yumzy.app"
+          "package_name": "com.yumzy.partner"
         }
       },
       "oauth_client": [
         {
-          "client_id": "1096387078386-bt3mgs9utifig3lvcqj7b7asn601nk6r.apps.googleusercontent.com",
+          "client_id": "1096387078386-v310d940rkakok611qp8r67068jtn45v.apps.googleusercontent.com",
           "client_type": 1,
           "android_info": {
-            "package_name": "com.yumzy.app",
+            "package_name": "com.yumzy.partner",
             "certificate_hash": "7a2aa757606b1fa1d109eb5823d103168ab7192e"
           }
         },
@@ -44,17 +44,54 @@
     },
     {
       "client_info": {
-        "mobilesdk_app_id": "1:1096387078386:android:a909f0578eabb7ed66886b",
+        "mobilesdk_app_id": "1:1096387078386:android:b249e5ce25e5408e66886b",
         "android_client_info": {
-          "package_name": "com.yumzy.partner"
+          "package_name": "com.yumzy.rider"
         }
       },
       "oauth_client": [
         {
-          "client_id": "1096387078386-v310d940rkakok611qp8r67068jtn45v.apps.googleusercontent.com",
+          "client_id": "1096387078386-mqd6etraqhbdaa8plfbq47sjh53t6m9u.apps.googleusercontent.com",
           "client_type": 1,
           "android_info": {
-            "package_name": "com.yumzy.partner",
+            "package_name": "com.yumzy.rider",
+            "certificate_hash": "7a2aa757606b1fa1d109eb5823d103168ab7192e"
+          }
+        },
+        {
+          "client_id": "1096387078386-j39cmg6m1k70u42ff20hf5t2j30valeg.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAsDDt8kb43yFMbEO3ixhEwuBm3jPmayWY"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "1096387078386-j39cmg6m1k70u42ff20hf5t2j30valeg.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:1096387078386:android:716971a45beac84866886b",
+        "android_client_info": {
+          "package_name": "com.yumzy.userapp"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "1096387078386-hvou3hu0lf2kfge3jin7jfuagi3udcpa.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.yumzy.userapp",
             "certificate_hash": "7a2aa757606b1fa1d109eb5823d103168ab7192e"
           }
         },
