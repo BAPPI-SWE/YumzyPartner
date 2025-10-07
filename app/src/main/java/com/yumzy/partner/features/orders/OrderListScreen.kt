@@ -394,10 +394,13 @@ private fun formatOrdersToHtml(orders: List<Order>, summary: List<ItemSummary>, 
             <div class="order-card">
              
               <div class="info">
-                <strong>${order.userName}</strong><br/>
-                Contact: ${order.userPhone}<br/>
-                ${order.fullAddress.replace("\n","<br/>")}
-              </div>
+    <strong>${order.userName}</strong> 
+    ${if (order.fullAddress.contains("Room:")) order.fullAddress.substringAfter("Room:").substringBefore("\n").let { "(Room: $it)" } else ""}<br/>
+    <hr/>
+    Contact: ${order.userPhone}<br/>
+    ${order.fullAddress.lines().filterNot { it.startsWith("Room:") }.joinToString("<br/>")}
+</div>
+
               <div class="items">
                 <strong>Items:</strong>
                 <ul>
