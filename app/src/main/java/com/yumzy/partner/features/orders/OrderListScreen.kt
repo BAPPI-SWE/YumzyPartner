@@ -10,7 +10,6 @@ import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Print
@@ -31,7 +30,6 @@ import com.google.firebase.ktx.Firebase
 import java.text.SimpleDateFormat
 import java.util.*
 
-// Data classes remain the same
 data class Order(
     val id: String = "",
     val userName: String = "",
@@ -57,7 +55,6 @@ fun OrderListScreen(
     onAcceptAllOrders: (orderIds: List<String>) -> Unit,
     onRejectAllOrders: (orderIds: List<String>) -> Unit
 ) {
-    // This part of the composable is unchanged
     var allOrders by remember { mutableStateOf<List<Order>>(emptyList()) }
     var itemSummary by remember { mutableStateOf<List<ItemSummary>>(emptyList()) }
     var isLoading by remember { mutableStateOf(true) }
@@ -90,7 +87,7 @@ fun OrderListScreen(
                     isLoading = false
                     snapshot?.let {
                         val orders = it.documents.mapNotNull { doc ->
-                            val address = "Building: ${doc.getString("building")}, Floor: ${doc.getString("floor")}, Room: ${doc.getString("room")}\n${doc.getString("userSubLocation")}, ${doc.getString("userBaseLocation")}"
+                            val address = "Room: ${doc.getString("room")}\n${doc.getString("userSubLocation")}"
                             doc.toObject(Order::class.java)?.copy(id = doc.id, fullAddress = address)
                         }
                         allOrders = orders
@@ -240,7 +237,6 @@ fun OrderListScreen(
     }
 }
 
-// Other composables are unchanged
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun FilterDropdown(selectedLocation: String, options: List<String>, onSelectionChanged: (String) -> Unit, modifier: Modifier = Modifier) {
@@ -264,7 +260,6 @@ fun FilterDropdown(selectedLocation: String, options: List<String>, onSelectionC
     }
 }
 
-// --- MODIFICATION START ---
 @Composable
 fun OrderCard(order: Order, onAccept: () -> Unit, onReject: () -> Unit) {
     val sdf = remember { SimpleDateFormat("dd MMM, hh:mm a", Locale.getDefault()) }
@@ -289,31 +284,18 @@ fun OrderCard(order: Order, onAccept: () -> Unit, onReject: () -> Unit) {
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Text("Total: ৳${order.totalPrice}", style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Bold)
-
-                // This 'when' block checks the order status and shows the appropriate buttons
                 when (order.orderStatus) {
                     "Accepted" -> {
-                        Button(
-                            onClick = { /* Already accepted, do nothing */ },
-                            enabled = false,
-                            colors = ButtonDefaults.buttonColors(
-                                disabledContainerColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.6f),
-                                disabledContentColor = Color.White
-                            )
-                        ) {
+                        Button(onClick = {}, enabled = false, colors = ButtonDefaults.buttonColors(disabledContainerColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.6f), disabledContentColor = Color.White)) {
                             Text("Accepted")
                         }
                     }
                     "Rejected" -> {
-                        OutlinedButton(
-                            onClick = { /* Already rejected, do nothing */ },
-                            enabled = false,
-                            border = BorderStroke(1.dp, Color.Red.copy(alpha = 0.6f))
-                        ) {
+                        OutlinedButton(onClick = {}, enabled = false, border = BorderStroke(1.dp, Color.Red.copy(alpha = 0.6f))) {
                             Text("Rejected", color = Color.Red.copy(alpha = 0.6f))
                         }
                     }
-                    else -> { // This is the default state for "Pending" orders
+                    else -> {
                         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                             OutlinedButton(onClick = onReject, colors = ButtonDefaults.outlinedButtonColors(contentColor = Color.Red)) { Text("Reject") }
                             Button(onClick = onAccept) { Text("Accept") }
@@ -324,15 +306,17 @@ fun OrderCard(order: Order, onAccept: () -> Unit, onReject: () -> Unit) {
         }
     }
 }
-// --- MODIFICATION END ---
 
-
-// The print functions are unchanged
 private fun formatOrdersToHtml(orders: List<Order>, summary: List<ItemSummary>, category: String, location: String): String {
     val sdf = SimpleDateFormat("dd-MMM-yyyy", Locale.getDefault())
     val date = sdf.format(Date())
     val locationFilter = if (location == "All") "All Locations" else location
     val categoryName = category.removePrefix("Pre-order ")
+
+    // Split summary into two columns
+    val half = (summary.size + 1) / 2
+    val left = summary.take(half)
+    val right = summary.drop(half)
 
     val builder = StringBuilder()
     builder.append("""
@@ -344,23 +328,12 @@ private fun formatOrdersToHtml(orders: List<Order>, summary: List<ItemSummary>, 
                 h1 { margin: 0; }
                 h2, h3, h4 { margin-top: 20px; margin-bottom: 10px; }
                 table { width: 100%; border-collapse: collapse; }
-                th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
+                th, td { border: 1px solid #ddd; padding: 6px; text-align: left; }
                 th { background-color: #f2f2f2; }
-                .orders-container {
-                  display: flex;
-                  flex-wrap: wrap;
-                  justify-content: space-between;
-                  margin-top: 20px;
-                }
-                .order-card {
-                  box-sizing: border-box;
-                  width: 30%;
-                  margin-bottom: 20px;
-                  border: 1px solid #ccc;
-                  border-radius: 8px;
-                  padding: 10px;
-                  page-break-inside: avoid;
-                }
+                .summary-tables { display: flex; justify-content: space-between; gap: 20px; }
+                .summary-tables table { width: 48%; }
+                .orders-container { display: flex; flex-wrap: wrap; justify-content: space-between; margin-top: 20px; }
+                .order-card { box-sizing: border-box; width: 30%; margin-bottom: 20px; border: 1px solid #ccc; border-radius: 8px; padding: 10px; page-break-inside: avoid; }
                 .order-card .info { margin-bottom: 10px; line-height: 1.4; }
                 .order-card .items { margin-bottom: 10px; }
                 .order-card .items ul { padding-left: 20px; margin: 0; }
@@ -370,21 +343,33 @@ private fun formatOrdersToHtml(orders: List<Order>, summary: List<ItemSummary>, 
         </head>
         <body>
             <div class="header">
-                <h1>Order Production Sheet</h1>
+                <h1>Yumzy Order Production Sheet</h1>
                 <h2>Category: $categoryName</h2>
                 <p>Date: $date | Location Filter: $locationFilter</p>
             </div>
             <h3>Total Items to Prepare</h3>
-            <table>
-                <tr><th>Item Name</th><th>Total Quantity</th></tr>
+            <div class="summary-tables">
+                <table>
+                    <tr><th>Item Name</th><th>Qty</th></tr>
     """.trimIndent())
 
-    summary.forEach {
+    left.forEach {
         builder.append("<tr><td>${it.name}</td><td>${it.quantity}</td></tr>")
     }
 
     builder.append("""
-            </table>
+                </table>
+                <table>
+                    <tr><th>Item Name</th><th>Qty</th></tr>
+    """.trimIndent())
+
+    right.forEach {
+        builder.append("<tr><td>${it.name}</td><td>${it.quantity}</td></tr>")
+    }
+
+    builder.append("""
+                </table>
+            </div>
             <hr>
             <h2>Individual Orders (${orders.size})</h2>
             <div class="orders-container">
@@ -394,9 +379,9 @@ private fun formatOrdersToHtml(orders: List<Order>, summary: List<ItemSummary>, 
         builder.append("""
             <div class="order-card">
               <div class="info">
-                Name: ${order.userName}<br/>
+                <strong>${order.userName}</strong><br/>
                 Contact: ${order.userPhone}<br/>
-                Address: ${order.fullAddress.replace("\n","<br/>")}
+                ${order.fullAddress.replace("\n","<br/>")}
               </div>
               <div class="items">
                 <strong>Items:</strong>
@@ -439,9 +424,10 @@ private fun printOrders(context: Context, htmlContent: String) {
         webView.createPrintDocumentAdapter()
     }
 
-    printManager.print(
-        jobName,
-        printAdapter,
-        PrintAttributes.Builder().build()
-    )
+    val printAttributes = PrintAttributes.Builder()
+        .setMediaSize(PrintAttributes.MediaSize.ISO_A4)
+        .setMinMargins(PrintAttributes.Margins.NO_MARGINS)
+        .build()
+
+    printManager.print(jobName, printAdapter, printAttributes)
 }
