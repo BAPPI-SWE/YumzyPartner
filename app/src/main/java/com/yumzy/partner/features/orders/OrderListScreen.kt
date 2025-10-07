@@ -339,6 +339,20 @@ private fun formatOrdersToHtml(orders: List<Order>, summary: List<ItemSummary>, 
                 .order-card .items ul { padding-left: 20px; margin: 0; }
                 .order-card .items li { margin-bottom: 4px; }
                 .order-card .total { font-weight: bold; text-align: right; }
+                .greeting {
+                  text-align: center;
+                  font-size: 12px;
+                  font-weight: bold;
+                  color: #000000
+;
+                  margin-bottom: 3px;
+                }
+                hr {
+                  border: 0;
+                  border-top: 1px solid #ddd;
+                  margin: 3px 0;
+                }
+
             </style>
         </head>
         <body>
@@ -378,6 +392,7 @@ private fun formatOrdersToHtml(orders: List<Order>, summary: List<ItemSummary>, 
     orders.forEach { order ->
         builder.append("""
             <div class="order-card">
+             
               <div class="info">
                 <strong>${order.userName}</strong><br/>
                 Contact: ${order.userPhone}<br/>
@@ -395,6 +410,11 @@ private fun formatOrdersToHtml(orders: List<Order>, summary: List<ItemSummary>, 
         builder.append("""
                 </ul>
               </div>
+               <hr/>
+               <div class="greeting">
+            <strong>Enjoy your meal –<i> Yumzy!</i></strong> 
+          </div>
+          <hr/>
               <div class="total">Total: ৳${order.totalPrice}</div>
             </div>
         """.trimIndent())
