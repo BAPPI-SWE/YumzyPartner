@@ -333,7 +333,7 @@ private fun formatOrdersToHtml(orders: List<Order>, summary: List<ItemSummary>, 
                 .summary-tables { display: flex; justify-content: space-between; gap: 20px; }
                 .summary-tables table { width: 48%; }
                 .orders-container { display: flex; flex-wrap: wrap; justify-content: space-between; margin-top: 20px; }
-                .order-card { box-sizing: border-box; width: 30%; margin-bottom: 20px; border: 1px solid #ccc; border-radius: 8px; padding: 10px; page-break-inside: avoid; }
+                .order-card { box-sizing: border-box; width: 24%; margin-bottom: 20px; border: 1px solid #ccc; border-radius: 8px; padding: 10px; page-break-inside: avoid; }
                 .order-card .info { margin-bottom: 10px; line-height: 1.4; }
                 .order-card .items { margin-bottom: 10px; }
                 .order-card .items ul { padding-left: 20px; margin: 0; }
@@ -395,9 +395,12 @@ private fun formatOrdersToHtml(orders: List<Order>, summary: List<ItemSummary>, 
              
               <div class="info">
     <strong>${order.userName}</strong> 
-    ${if (order.fullAddress.contains("Room:")) order.fullAddress.substringAfter("Room:").substringBefore("\n").let { "(Room: $it)" } else ""}<br/>
+    ${ if (order.fullAddress.contains("Room:")) {
+            val room = order.fullAddress.substringAfter("Room:").substringBefore("\n").trim()
+            """ <span style="font-size:11px; color:#00000;">(Room:$room)</span> """
+        } else ""}<br/>
     <hr/>
-    Contact: ${order.userPhone}<br/>
+    ${order.userPhone}<br/>
     ${order.fullAddress.lines().filterNot { it.startsWith("Room:") }.joinToString("<br/>")}
 </div>
 
