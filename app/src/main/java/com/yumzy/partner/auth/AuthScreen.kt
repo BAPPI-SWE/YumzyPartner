@@ -48,13 +48,13 @@ fun AuthScreen(onSignInSuccess: () -> Unit) {
                 fontWeight = FontWeight.Bold,
                 textAlign = TextAlign.Center
             )
-            Spacer(modifier = Modifier.height(32.dp))
+            Spacer(modifier = Modifier.height(6.dp))
             // You'll need to add an icon for the partner app to the drawable folder
             // For now, we can reuse the Google logo as a placeholder
             Image(
-                painter = painterResource(id = R.drawable.ic_google_logo),
+                painter = painterResource(id = R.drawable.partner),
                 contentDescription = "Partner Icon",
-                modifier = Modifier.size(100.dp)
+                modifier = Modifier.size(200.dp)
             )
         }
 
