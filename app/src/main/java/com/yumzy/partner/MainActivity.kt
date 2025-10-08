@@ -29,11 +29,14 @@ import com.yumzy.partner.features.dashboard.PartnerDashboardScreen
 import com.yumzy.partner.features.menu.AddMenuItemScreen
 import com.yumzy.partner.features.menu.CategoryDetailScreen
 import com.yumzy.partner.features.menu.CreateCategoryScreen
+import com.yumzy.partner.features.orders.Order
 import com.yumzy.partner.features.orders.OrderListScreen
 import com.yumzy.partner.features.profile.EditProfileScreen
 import com.yumzy.partner.features.profile.RestaurantProfileScreen
+import com.yumzy.partner.notifications.OneSignalNotificationHelper
 import com.yumzy.partner.ui.theme.YumzyPartnerTheme
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.tasks.await
 import java.net.URLDecoder
 import java.net.URLEncoder
 import java.nio.charset.StandardCharsets
@@ -59,11 +62,9 @@ class MainActivity : ComponentActivity() {
                         val viewModel = viewModel<AuthViewModel>()
                         val state by viewModel.state.collectAsStateWithLifecycle()
 
-                        LaunchedEffect(key1 = Unit) {
+                        LaunchedEffect(Unit) {
                             val currentUser = googleAuthUiClient.getSignedInUser()
-                            if (currentUser != null) {
-                                checkRestaurantProfile(currentUser.userId, navController)
-                            }
+                            if (currentUser != null) checkRestaurantProfile(currentUser.userId, navController)
                         }
 
                         val launcher = rememberLauncherForActivityResult(
@@ -79,41 +80,45 @@ class MainActivity : ComponentActivity() {
                             }
                         }
 
-                        LaunchedEffect(key1 = state.isSignInSuccessful) {
+                        LaunchedEffect(state.isSignInSuccessful) {
                             if (state.isSignInSuccessful) {
                                 val userId = googleAuthUiClient.getSignedInUser()?.userId
-                                if (userId != null) {
-                                    checkRestaurantProfile(userId, navController)
-                                }
+                                if (userId != null) checkRestaurantProfile(userId, navController)
                                 viewModel.resetState()
                             }
                         }
 
-                        AuthScreen(onSignInSuccess = {
-                            lifecycleScope.launch {
-                                val signInIntentSender = googleAuthUiClient.signIn()
-                                launcher.launch(
-                                    IntentSenderRequest.Builder(
-                                        signInIntentSender ?: return@launch
-                                    ).build()
-                                )
+                        AuthScreen(
+                            onSignInSuccess = {
+                                lifecycleScope.launch {
+                                    val signInIntentSender = googleAuthUiClient.signIn()
+                                    launcher.launch(
+                                        IntentSenderRequest.Builder(
+                                            signInIntentSender ?: return@launch
+                                        ).build()
+                                    )
+                                }
                             }
-                        })
+                        )
                     }
 
                     composable("create_profile") {
                         val userId = Firebase.auth.currentUser?.uid ?: return@composable
                         RestaurantProfileScreen(onSaveClicked = { name, cuisine, deliveryLocations ->
                             val restaurantProfile = hashMapOf(
-                                "ownerId" to userId, "name" to name, "cuisine" to cuisine,
-                                "deliveryLocations" to deliveryLocations, // Updated
+                                "ownerId" to userId,
+                                "name" to name,
+                                "cuisine" to cuisine,
+                                "deliveryLocations" to deliveryLocations,
                                 "email" to (Firebase.auth.currentUser?.email ?: "")
                             )
 
                             Firebase.firestore.collection("restaurants").document(userId)
                                 .set(restaurantProfile)
                                 .addOnSuccessListener {
-                                    navController.navigate("dashboard") { popUpTo("auth") { inclusive = true } }
+                                    navController.navigate("dashboard") {
+                                        popUpTo("auth") { inclusive = true }
+                                    }
                                 }
                         })
                     }
@@ -130,12 +135,8 @@ class MainActivity : ComponentActivity() {
                                 val encodedCategoryName = URLEncoder.encode(categoryName, StandardCharsets.UTF_8.toString())
                                 navController.navigate("category_detail/$encodedCategoryName")
                             },
-                            onNavigateToEditProfile = {
-                                navController.navigate("edit_profile")
-                            },
-                            onDeleteItem = { itemId ->
-                                deleteMenuItem(ownerId, itemId)
-                            },
+                            onNavigateToEditProfile = { navController.navigate("edit_profile") },
+                            onDeleteItem = { itemId -> deleteMenuItem(ownerId, itemId) },
                             onDeleteCategory = { category ->
                                 deleteCategory(ownerId, category.id, "Pre-order ${category.name}")
                             }
@@ -150,7 +151,7 @@ class MainActivity : ComponentActivity() {
                                     "name" to name,
                                     "cuisine" to cuisine,
                                     "imageUrl" to imageUrl,
-                                    "deliveryLocations" to deliveryLocations // Updated
+                                    "deliveryLocations" to deliveryLocations
                                 )
                                 Firebase.firestore.collection("restaurants").document(ownerId)
                                     .update(updates)
@@ -162,22 +163,20 @@ class MainActivity : ComponentActivity() {
                         )
                     }
 
-                    // ... (rest of the NavHost remains the same)
-
                     composable("create_category") {
                         val ownerId = Firebase.auth.currentUser?.uid ?: return@composable
                         CreateCategoryScreen(
                             onSaveCategory = { categoryName, startTime, endTime, deliveryTime ->
                                 val categoryData = hashMapOf(
-                                    "name" to categoryName, "startTime" to startTime,
-                                    "endTime" to endTime, "deliveryTime" to deliveryTime
+                                    "name" to categoryName,
+                                    "startTime" to startTime,
+                                    "endTime" to endTime,
+                                    "deliveryTime" to deliveryTime
                                 )
                                 Firebase.firestore.collection("restaurants").document(ownerId)
                                     .collection("preOrderCategories")
                                     .add(categoryData)
-                                    .addOnSuccessListener {
-                                        navController.popBackStack()
-                                    }
+                                    .addOnSuccessListener { navController.popBackStack() }
                             }
                         )
                     }
@@ -200,9 +199,7 @@ class MainActivity : ComponentActivity() {
                                 val encodedCategory = URLEncoder.encode(category, StandardCharsets.UTF_8.toString())
                                 navController.navigate("order_list/$encodedCategory")
                             },
-                            onDeleteItem = { itemId ->
-                                deleteMenuItem(ownerId, itemId)
-                            }
+                            onDeleteItem = { itemId -> deleteMenuItem(ownerId, itemId) }
                         )
                     }
 
@@ -212,13 +209,25 @@ class MainActivity : ComponentActivity() {
                     ) { backStackEntry ->
                         val encodedCategoryName = backStackEntry.arguments?.getString("categoryName") ?: ""
                         val categoryName = URLDecoder.decode(encodedCategoryName, StandardCharsets.UTF_8.toString())
+
                         OrderListScreen(
                             categoryName = categoryName,
                             onBackClicked = { navController.popBackStack() },
-                            onAcceptOrder = { orderId -> updateOrderStatus(orderId, "Accepted") },
-                            onRejectOrder = { orderId -> updateOrderStatus(orderId, "Rejected") },
-                            onAcceptAllOrders = { orderIds -> updateAllOrdersStatus(orderIds, "Accepted") },
-                            onRejectAllOrders = { orderIds -> updateAllOrdersStatus(orderIds, "Rejected") }
+                            onAcceptOrder = { orderId, userId ->
+                                updateOrderStatus(orderId, userId, "Accepted")
+                            },
+                            onRejectOrder = { orderId, userId ->
+                                updateOrderStatus(orderId, userId, "Rejected")
+                            },
+                            onAcceptAllOrders = { orders ->
+                                updateAllOrdersStatus(orders, "Accepted")
+                            },
+                            onRejectAllOrders = { orders ->
+                                updateAllOrdersStatus(orders, "Rejected")
+                            },
+                            onSendCustomNotification = { orderIds, message ->
+                                sendCustomNotifications(orderIds, message)
+                            }
                         )
                     }
 
@@ -233,11 +242,8 @@ class MainActivity : ComponentActivity() {
                         AddMenuItemScreen(
                             category = category,
                             onSaveItemClicked = { itemName, price ->
-                                // In MainActivity.kt, inside composable("add_item/{category}")
-
                                 val newItem = hashMapOf(
                                     "name" to itemName,
-                                    // Use the Elvis operator to default to 0.0 if conversion to Double fails
                                     "price" to (price.toDoubleOrNull() ?: 0.0),
                                     "category" to category
                                 )
@@ -256,8 +262,7 @@ class MainActivity : ComponentActivity() {
         }
     }
 
-    // ... (rest of MainActivity functions remain the same)
-
+    // ✅ Profile check
     private fun checkRestaurantProfile(userId: String, navController: NavController) {
         val db = Firebase.firestore
         db.collection("restaurants").document(userId).get()
@@ -286,13 +291,10 @@ class MainActivity : ComponentActivity() {
     private fun deleteCategory(ownerId: String, categoryId: String, categoryName: String) {
         val db = Firebase.firestore
         val restaurantRef = db.collection("restaurants").document(ownerId)
-
         restaurantRef.collection("menuItems").whereEqualTo("category", categoryName).get()
             .addOnSuccessListener { snapshot ->
                 val batch = db.batch()
-                for (document in snapshot.documents) {
-                    batch.delete(document.reference)
-                }
+                for (document in snapshot.documents) batch.delete(document.reference)
                 batch.commit().addOnSuccessListener {
                     restaurantRef.collection("preOrderCategories").document(categoryId)
                         .delete()
@@ -303,24 +305,85 @@ class MainActivity : ComponentActivity() {
             }
     }
 
-    private fun updateOrderStatus(orderId: String, newStatus: String) {
-        Firebase.firestore.collection("orders").document(orderId)
-            .update("orderStatus", newStatus)
-            .addOnSuccessListener {
-                Toast.makeText(applicationContext, "Order marked as $newStatus", Toast.LENGTH_SHORT).show()
+    // ✅ Updated Accept/Reject for single order
+    private fun updateOrderStatus(orderId: String, userId: String, newStatus: String) {
+        lifecycleScope.launch {
+            try {
+                val db = Firebase.firestore
+                val restaurantId = Firebase.auth.currentUser?.uid ?: return@launch
+                val restaurantDoc = db.collection("restaurants").document(restaurantId).get().await()
+                val restaurantName = restaurantDoc.getString("name") ?: "Your Restaurant"
+
+                db.collection("orders").document(orderId)
+                    .update("orderStatus", newStatus)
+                    .addOnSuccessListener {
+                        Toast.makeText(applicationContext, "Order marked as $newStatus", Toast.LENGTH_SHORT).show()
+                    }
+
+                // 🔔 Send OneSignal notification
+                OneSignalNotificationHelper.sendOrderStatusNotification(
+                    userId = userId,
+                    orderId = orderId,
+                    newStatus = newStatus,
+                    restaurantName = restaurantName
+                )
+
+            } catch (e: Exception) {
+                Toast.makeText(applicationContext, "Error: ${e.message}", Toast.LENGTH_SHORT).show()
             }
+        }
     }
 
-    private fun updateAllOrdersStatus(orderIds: List<String>, newStatus: String) {
-        if (orderIds.isEmpty()) return
-        val db = Firebase.firestore
-        val batch = db.batch()
-        orderIds.forEach { orderId ->
-            val docRef = db.collection("orders").document(orderId)
-            batch.update(docRef, "orderStatus", newStatus)
+    // ✅ Updated Accept/Reject All
+    private fun updateAllOrdersStatus(orders: List<Order>, newStatus: String) {
+        if (orders.isEmpty()) return
+        lifecycleScope.launch {
+            try {
+                val db = Firebase.firestore
+                val restaurantId = Firebase.auth.currentUser?.uid ?: return@launch
+                val restaurantDoc = db.collection("restaurants").document(restaurantId).get().await()
+                val restaurantName = restaurantDoc.getString("name") ?: "Your Restaurant"
+
+                val batch = db.batch()
+                orders.forEach { order ->
+                    val docRef = db.collection("orders").document(order.id)
+                    batch.update(docRef, "orderStatus", newStatus)
+                }
+                batch.commit().await()
+
+                Toast.makeText(applicationContext, "${orders.size} orders marked as $newStatus", Toast.LENGTH_SHORT).show()
+
+                // 🔔 Send bulk notification
+                OneSignalNotificationHelper.sendBulkOrderStatusNotification(
+                    orderIds = orders.map { it.id },
+                    newStatus = newStatus,
+                    restaurantName = restaurantName
+                )
+
+            } catch (e: Exception) {
+                Toast.makeText(applicationContext, "Error updating orders: ${e.message}", Toast.LENGTH_SHORT).show()
+            }
         }
-        batch.commit().addOnSuccessListener {
-            Toast.makeText(applicationContext, "${orderIds.size} orders marked as $newStatus", Toast.LENGTH_SHORT).show()
+    }
+
+    // ✅ Custom Notification Sender
+    private fun sendCustomNotifications(orderIds: List<String>, message: String) {
+        lifecycleScope.launch {
+            try {
+                val restaurantId = Firebase.auth.currentUser?.uid ?: return@launch
+                val restaurantDoc = Firebase.firestore.collection("restaurants").document(restaurantId).get().await()
+                val restaurantName = restaurantDoc.getString("name") ?: "Your Restaurant"
+
+                val success = OneSignalNotificationHelper.sendCustomNotificationToUsers(
+                    orderIds, message, restaurantName
+                )
+
+                if (success) Toast.makeText(applicationContext, "Notification sent!", Toast.LENGTH_SHORT).show()
+                else Toast.makeText(applicationContext, "No users found or failed to send", Toast.LENGTH_SHORT).show()
+
+            } catch (e: Exception) {
+                Toast.makeText(applicationContext, "Error sending notification: ${e.message}", Toast.LENGTH_SHORT).show()
+            }
         }
     }
 }

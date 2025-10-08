@@ -40,10 +40,6 @@ android {
     buildFeatures {
         compose = true
     }
-    // REMOVE (or ensure you don't have) the old composeOptions block
-    // composeOptions {
-    //     kotlinCompilerExtensionVersion = "1.5.11"
-    // }
     packaging {
         resources {
             excludes += "/META-INF/{AL2.0,LGPL2.1}"
@@ -73,27 +69,26 @@ dependencies {
     implementation(platform("com.google.firebase:firebase-bom:33.1.1"))
     implementation("com.google.firebase:firebase-auth-ktx")
     implementation("com.google.firebase:firebase-firestore-ktx")
+    implementation("com.google.firebase:firebase-functions-ktx")
 
     // Google Sign-In
     implementation("com.google.android.gms:play-services-auth:21.2.0")
 
-    // This is the Compose Compiler dependency which is now managed by the plugin
+    // Compose Compiler
     implementation("androidx.compose.compiler:compiler:1.5.11")
 
+    // Add OkHttp for OneSignal API calls
+    implementation("com.squareup.okhttp3:okhttp:4.12.0")
+
+    // Add OneSignal dependency (optional, only if you want SDK features)
+    implementation("com.onesignal:OneSignal:[5.0.0, 5.99.99]")
 
     testImplementation("junit:junit:4.13.2")
     androidTestImplementation("androidx.test.ext:junit:1.2.1")
     androidTestImplementation("androidx.test.espresso:espresso-core:3.6.1")
-  
-
-    // Ensure these lines are correct
     androidTestImplementation(platform("androidx.compose:compose-bom:2024.06.00"))
     androidTestImplementation("androidx.compose.ui:ui-test-junit4")
 
     debugImplementation("androidx.compose.ui:ui-tooling")
     debugImplementation("androidx.compose.ui:ui-test-manifest")
-
-    // Add this for calling Cloud Functions
-    implementation("com.google.firebase:firebase-functions-ktx")
-
 }
